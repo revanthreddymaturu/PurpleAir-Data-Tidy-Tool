@@ -27,7 +27,7 @@ ui <- fluidPage(
   theme = bs_theme(version = 4, secondary = "#210749", bootswatch = "pulse"),
  #useShinydashboard(),
   # App title ----
-  titlePanel("Purple Air Data Merger(For PM1.0 & PM10.0)"),
+  titlePanel("Purple Air Data Merger(Including PM1.0 & PM10.0)"),
   
   # Sidebar layout with input and output definitions ----
   sidebarLayout(
@@ -46,7 +46,7 @@ ui <- fluidPage(
       tags$hr(),
       fileInput("rawdata", "Choose Raw CSV File(s):",
                 multiple = TRUE,
-                accept = ".csv"),
+                accept = ".csv",".CSV"),
       
       # Horizontal line ----
       tags$hr(),
@@ -85,7 +85,7 @@ ui <- fluidPage(
                tags$hr(),
   
                # Input: Choose Smoke Calculation Optional ----
-              #  checkboxInput("smokeset", "Optional: Use Smoke (High PM2.5) Conversion", value = FALSE),
+               checkboxInput("smokeset", "Optional: Use Smoke (High PM2.5) Conversion", value = FALSE),
                
                # Input: Use only Single Channel Values for Correction Optional ----
                checkboxInput("channelset", "Optional: Compress Channels together to remove NA", value = FALSE),
@@ -237,7 +237,7 @@ server <- function(input, output, session) {
     Tidy_data <- Raw_data()
     # if(input$pmset == TRUE) {
     #Tidy_data <- select(Tidy_data, "UTCDateTime", "pm1_0_cf_1", "pm1_0_cf_1_b", "pm2_5_cf_1", "pm2_5_cf_1_b", "pm10_0_cf_1", "pm10_0_cf_1_b", "current_temp_f", "current_humidity", "current_dewpoint_f", "pressure")
-    Tidy_data <- select(Tidy_data, "UTCDateTime", "pm1_0_atm","pm1_0_atm_b", "pm10_0_atm","pm10_0_atm_b", "current_temp_f", "current_humidity", "current_dewpoint_f", "pressure")
+    Tidy_data <- select(Tidy_data, "UTCDateTime", "pm1_0_atm","pm1_0_atm_b","pm2_5_atm", "pm2_5_atm_b", "pm10_0_atm","pm10_0_atm_b", "current_temp_f", "current_humidity", "current_dewpoint_f", "pressure")
 
     #Tidy_data <- select(Tidy_data, "UTCDateTime", "pm2_5_atm", "pm2_5_atm_b", "current_temp_f", "current_humidity", "current_dewpoint_f", "pressure")
     Tidy_data$UTCDateTime <- str_replace_all(Tidy_data$UTCDateTime, "[:alpha:]", " ") #Removes any letters in Date column
@@ -247,10 +247,10 @@ server <- function(input, output, session) {
     #   mutate(Date_EST = as_datetime(Date_UTC, tz = "EST"))
     #Tidy_data$Date_UTC <- as.POSIXct(Tidy_data$UTCDateTime, tz = "EST", format = "%Y/%m/%d %H:%M:%S", usetz = T) # Convert to UTC
     # Tidy_data <- select(Tidy_data, "Date_UTC", "pm1_0_cf_1", "pm1_0_cf_1_b", "pm2_5_cf_1", "pm2_5_cf_1_b", "pm10_0_cf_1", "pm10_0_cf_1_b", "current_temp_f", "current_humidity", "current_dewpoint_f", "pressure")
-    Tidy_data <- select(Tidy_data, "Date_UTC", "pm1_0_atm","pm1_0_atm_b", "pm10_0_atm","pm10_0_atm_b", "current_temp_f", "current_humidity", "current_dewpoint_f", "pressure")
+    Tidy_data <- select(Tidy_data, "Date_UTC", "pm1_0_atm","pm1_0_atm_b","pm2_5_atm", "pm2_5_atm_b", "pm10_0_atm","pm10_0_atm_b", "current_temp_f", "current_humidity", "current_dewpoint_f", "pressure")
 
     #Tidy_data <- select(Tidy_data, "Date_UTC", "pm2_5_atm", "pm2_5_atm_b", "current_temp_f", "current_humidity", "current_dewpoint_f", "pressure")
-    colnames(Tidy_data) = c("date", "PM1_A", "PM1_B", "PM10_A", "PM10_B", "Temperature", "Humidity", "Dewpoint", "Pressure")
+    colnames(Tidy_data) = c("date", "PM1_A", "PM1_B","PM2.5_A","PM2.5_B", "PM10_A", "PM10_B", "Temperature", "Humidity", "Dewpoint", "Pressure")
     #return(Tidy_data)
     #colSums(is.na(Tidy_data)) #prints the number of NA in each column
     # }
@@ -284,8 +284,29 @@ server <- function(input, output, session) {
   # Define Average Data Reactive Function ----
   Avg_data <- reactive({
     req(input$rawdata)
+     # Get the tidy data
+    tidy_data <- Tidy_data()
+  
+  # Remove non-digit characters from the Pressure column
+    tidy_data$Pressure <- gsub("[^0-9.]", "", tidy_data$Pressure)
+  
+  # Convert Pressure column to numeric
+    tidy_data$Pressure <- as.numeric(tidy_data$Pressure)
+
+  # Remove non-digit characters from the Temperature column
+    tidy_data$Temperature <- gsub("[^0-9.]", "", tidy_data$Temperature)
+  
+  # Convert Temperature column to numeric
+    tidy_data$Temperature <- as.numeric(tidy_data$Temperature)
+
+  # Remove non-digit characters from the Humidity column
+    tidy_data$Humidity <- gsub("[^0-9.]", "", tidy_data$Humidity)
+  
+  # Convert Humidity column to numeric
+    tidy_data$Humidity <- as.numeric(tidy_data$Humidity)
+    
     Avg_data <- timeAverage(
-      Tidy_data(),
+      tidy_data,
       avg.time = "hour",
       data.thresh = 0,
       statistic = "mean",
@@ -339,6 +360,10 @@ server <- function(input, output, session) {
         mutate(AB_dif_val1 = abs(PM1_A - PM1_B))  %>% #Checks difference between Channels
         mutate(PM1_AVG = ((PM1_A + PM1_B)/2))  %>% #Calculates AVG between A & B Channels
         mutate(PM_Check1 = ifelse(is.na(PM1_A) | is.na(PM1_B), coalesce(PM1_A,PM1_B), PM1_AVG))%>%
+        mutate(AB_dif_per2.5 = (abs(PM2.5_A - PM2.5_B)/((PM2.5_A + PM2.5_B)/2))) %>% # Calculates percent diff
+        mutate(AB_dif_val2.5 = abs(PM2.5_A - PM2.5_B))  %>% #Checks difference between Channels
+        mutate(PM2.5_AVG = ((PM2.5_A + PM2.5_B)/2))  %>% #Calculates AVG between A & B Channels
+        mutate(PM_Check2.5 = ifelse(is.na(PM2.5_A) | is.na(PM2.5_B), coalesce(PM2.5_A,PM2.5_B), PM2.5_AVG))%>%
         mutate(AB_dif_per10 = (abs(PM10_A - PM10_B)/((PM10_A + PM10_B)/2))) %>% # Calculates percent diff
         mutate(AB_dif_val10 = abs(PM10_A - PM10_B))  %>% #Checks difference between Channels
         mutate(PM10_AVG = ((PM10_A + PM10_B)/2))  %>% #Calculates AVG between A & B Channels
@@ -347,15 +372,19 @@ server <- function(input, output, session) {
 #      mutate(PM_Check = ifelse(is.na(PM2.5_A) | is.na(PM2.5_B), coalesce(PM2.5_A,PM2.5_B), paste0(PM2.5_A,PM2.5_B)))
       Purple_Data$AB_dif1 <- round(Purple_Data$AB_dif_per1, 2)
       Purple_Data$AB_dif10 <- round(Purple_Data$AB_dif_per10, 2)
+      Purple_Data$AB_dif2.5 <- round(Purple_Data$AB_dif_per2.5, 2)
+
     } else if(input$letterset == "Channel A"){
       # Sets the channel to Channel A
       Purple_Data <- Purple_Data %>%
       mutate(PM_Check1 = PM1_A)  %>%
+      mutate(PM_Check2.5 = PM2.5_A)  %>%
       mutate(PM_Check10 = PM10_A)
     } else if(input$letterset == "Channel B"){
       # Sets the channel to Channel B
       Purple_Data <- Purple_Data %>%
       mutate(PM_Check1 = PM1_B) %>%
+      mutate(PM_Check2.5 = PM2.5_B) %>%
       mutate(PM_Check10 = PM10_B)
     } else{
     # Validation for correction is 70% difference or a difference of 5 
@@ -365,6 +394,10 @@ server <- function(input, output, session) {
         mutate(AB_dif_val1 = abs(PM1_A - PM1_B))  %>% #Checks difference between Channels
         mutate(PM1_AVG = ((PM1_A + PM1_B)/2))  %>% #Calculates AVG between A & B Channels
         mutate(PM_Check1 = if_else(AB_dif_per1 <= 0.7 | AB_dif_val1 <= 5, PM1_AVG, NA_real_)) %>%
+        mutate(AB_dif_per2.5 = (abs(PM2.5_A - PM2.5_B)/((PM2.5_A + PM2.5_B)/2))) %>% # Calculates percent diff
+        mutate(AB_dif_val2.5 = abs(PM2.5_A - PM2.5_B))  %>% #Checks difference between Channels
+        mutate(PM2.5_AVG = ((PM2.5_A + PM2.5_B)/2))  %>% #Calculates AVG between A & B Channels
+        mutate(PM_Check2.5 = if_else(AB_dif_per2.5 <= 0.7 | AB_dif_val2.5 <= 5, PM2.5_AVG, NA_real_)) %>%
         mutate(AB_dif_per10 = (abs(PM10_A - PM10_B)/((PM10_A + PM10_B)/2))) %>% # Calculates percent diff
         mutate(AB_dif_val10 = abs(PM10_A - PM10_B))  %>% #Checks difference between Channels
         mutate(PM10_AVG = ((PM10_A + PM10_B)/2))  %>% #Calculates AVG between A & B Channels
@@ -373,32 +406,34 @@ server <- function(input, output, session) {
 
         Purple_Data$AB_dif1 <- round(Purple_Data$AB_dif_per1, 2)
         Purple_Data$AB_dif10 <- round(Purple_Data$AB_dif_per10, 2)
+        Purple_Data$AB_dif2.5 <- round(Purple_Data$AB_dif_per2.5, 2)
+
     }
 
     corr_data <- Purple_Data
-    corr_data = rename(corr_data, c(PM1 = PM_Check1,PM10 = PM_Check10, RH = Humidity)) # Rename for equation
+    corr_data = rename(corr_data, c(PM1 = PM_Check1,PM2.5 = PM_Check2.5,PM10 = PM_Check10, RH = Humidity)) # Rename for equation
 
-    # if(input$smokeset == TRUE) {
-    #   # #correction using EPA simple correction
-    #   corr_data <- corr_data %>% mutate(PM_corr_EPA = case_when(is.numeric(PM) ~ 0.524*PM - 0.0862*RH + 5.75,
-    #                                                             TRUE ~ NA_real_
-    #                                                             )
-    #   )
-    # }
-    # else {
-    #   #Other Method using EPA Multi Point Correction for High PM2.5 (smoke) *Newer Equation (Dec 2022)*
-    #   corr_data <- corr_data %>% mutate(PM_corr_EPA = case_when((0 <= PM) & (PM < 570) ~ PM*0.524 - 0.0862*RH + 5.75,
-    #                                                         (570 <= PM) & (PM < 611) ~ ((0.0244 * PM - 13.9) * (((PM)^{2}) * (4.21*10^{-4}) + (PM*0.392) + 3.44) + (1-(0.0244 * PM - 13.9)) * (PM*0.524 - 0.0862*RH + 5.75)),
-    #                                                         (611 <= PM) ~ ((PM)^{2}) * (4.21*10^{-4}) + (PM*0.392) + 3.44,
-    #                                                         TRUE ~ NA_real_
-    #                                                         )
-    #   )
-    # }
+    if(input$smokeset == TRUE) {
+      # #correction using EPA simple correction
+      corr_data <- corr_data %>% mutate(PM2.5_corr_EPA = case_when(is.numeric(PM2.5) ~ 0.524*PM2.5 - 0.0862*RH + 5.75,
+                                                                TRUE ~ NA_real_
+                                                                )
+      )
+    }
+    else {
+      #Other Method using EPA Multi Point Correction for High PM2.5 (smoke) *Newer Equation (Dec 2022)*
+      corr_data <- corr_data %>% mutate(PM2.5_corr_EPA = case_when((0 <= PM2.5) & (PM2.5 < 570) ~ PM2.5*0.524 - 0.0862*RH + 5.75,
+                                                            (570 <= PM2.5) & (PM2.5 < 611) ~ ((0.0244 * PM2.5 - 13.9) * (((PM2.5)^{2}) * (4.21*10^{-4}) + (PM2.5*0.392) + 3.44) + (1-(0.0244 * PM2.5 - 13.9)) * (PM2.5*0.524 - 0.0862*RH + 5.75)),
+                                                            (611 <= PM2.5) ~ ((PM2.5)^{2}) * (4.21*10^{-4}) + (PM2.5*0.392) + 3.44,
+                                                            TRUE ~ NA_real_
+                                                            )
+      )
+    }
     corr_data<- corr_data %>% 
     mutate(PM1_corr_EPA = case_when(is.numeric(PM1) ~ (PM1-4.2012)/0.3803,TRUE ~ NA_real_)) %>%
     mutate(PM10_corr_EPA = case_when(is.numeric(PM10) ~ (PM10-8.7635)/0.1475,TRUE ~ NA_real_))
     
-    corr_data = select(corr_data,"date", "PM1", "PM1_corr_EPA","PM10", "PM10_corr_EPA","RH", "Temperature", "Pressure") #Reorder df
+    corr_data = select(corr_data,"date", "PM1", "PM1_corr_EPA","PM2.5","PM2.5_corr_EPA","PM10", "PM10_corr_EPA","RH", "Temperature", "Pressure") #Reorder df
     
 #     #Other Method using EPA Multi Point Correction *Older method for PM2.5_atm*
 #     # corr_data <- corr_data %>% mutate(PM_corr_EPA = case_when((0 <= PM) & (PM < 30) ~ 0.524*PM - 0.0862*RH + 5.75,
@@ -592,7 +627,7 @@ Zone_sel <- reactive({if(input$zonetime == "EST") {
     tryCatch(
       {
         Corrdf <- Corr_data()
-        validate(need(ncol(Corrdf) == 10,  "Dataframe is missing columns please review data for errors/corruption."))
+        validate(need(ncol(Corrdf) == 12,  "Dataframe is missing columns please review data for errors/corruption."))
         #Corrdf
         Tbloption <- Zone_sel()
         Corrdf <- datatable(Corrdf) %>% 
@@ -684,7 +719,7 @@ Zone_sel <- reactive({if(input$zonetime == "EST") {
         ),
       tags$hr(),
       h5("About:"),
-      "Purple Air Data Merger Version 1.0.0, exclusively for PM1.0 and PM10.0 Data",
+      "Purple Air Data Merger Version 1.0.0, now has support for PM1.0 and PM10.0 Data",
       br(),
       "More info and updates can be be found on GitHub:",
       a(href = "https://github.com/revanthreddymaturu/PurpleAir-PM1.0-PM10.0-Data-Tidy-Tool", "Link"),

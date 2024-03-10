@@ -1,0 +1,10 @@
+name: purpleair-pm10-pm100-data-tidy-tool
+title:
+username: revanthmaturu
+account: revanthmaturu
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 11428894
+bundleId: 8354024
+url: https://revanthmaturu.shinyapps.io/purpleair-pm10-pm100-data-tidy-tool/
+version: 1
