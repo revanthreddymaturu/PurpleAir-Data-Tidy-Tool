@@ -46,7 +46,7 @@ ui <- fluidPage(
       tags$hr(),
       fileInput("rawdata", "Choose Raw CSV File(s):",
                 multiple = TRUE,
-                accept = ".csv",".CSV"),
+                accept = ".csv, .CSV"),
       
       # Horizontal line ----
       tags$hr(),
@@ -197,7 +197,7 @@ server <- function(input, output, session) {
   Raw_data <- reactive({
     req(input$rawdata)
     Raw_input <- input$rawdata # Creates File
-    Tidy_input <- Raw_input %>% filter(grepl('.csv', name)) # Selects only files that end in ".csv"
+    Tidy_input <- Raw_input %>% filter(grepl("\\.(csv|CSV)$", name)) # Selects only files that end in ".csv"
     Rawdf <- do.call(rbind, lapply(Tidy_input$datapath, fread, fill = TRUE)) # Combines files into a df
     #Rawdf <- do.call(rbind, lapply(Tidy_input$datapath, read_csv)) # Combines files into a df
     return(Rawdf)
