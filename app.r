@@ -70,7 +70,7 @@ ui <- fluidPage(
       
       # Input: Choose dataset ----
       selectInput("dataset", "Choose Dataset to Download:",
-      			  choices = c("Raw Data", "Tidy Data","Average Data","Corrected Data")),
+      			  choices = c("Raw Data", "Tidy Data","Average Data","Corrected Data","Daily Averaged Data(With Correction)")),
                   #choices = c("Raw Data", "Tidy Data", "Average Data", "Corrected Data", "Frequency Data")),
       
       # Input: Select number of rows to display ----
@@ -118,6 +118,7 @@ ui <- fluidPage(
         tabPanel("Tidy Data", DT::dataTableOutput("tidyfile")),
         tabPanel("Average Data", DT::dataTableOutput("avgfile")),
         tabPanel("Corrected Data", DT::dataTableOutput("corrfile")),
+        tabPanel("Daily Averaged Data(With Correction)", DT::dataTableOutput("dailyfile")),
         # tabPanel("Frequency Data", DT::dataTableOutput("freqfile")),
         # tabPanel("File names", DT::dataTableOutput("rawfile")),
         # tabPanel("Data Complete", verbatimTextOutput("Percomp")),
@@ -454,6 +455,40 @@ server <- function(input, output, session) {
       mutate(Timezone = if_else(!is.na(date), Tz_val, NA_character_))
     return(corr_data)
   })
+
+  # Define Daily Averaged Corrected Data Reactive Function ----  
+  Daily_data <- reactive({
+    Purple_Data <- Corr_data()
+    
+    # Columns to aggregate
+    columns_to_aggregate <- c("PM1", "PM1_corr_EPA", "PM2.5", "PM2.5_corr_EPA", "PM10", "PM10_corr_EPA", "RH", "Temperature", "Pressure")
+
+    # Convert datetime column to Date class
+    Purple_Data$date <- as.Date(Purple_Data$date)
+
+    # Aggregate hourly data to daily data
+    daily_data <- Purple_Data %>%
+    group_by(date) %>%
+    summarise(across(all_of(columns_to_aggregate), mean, na.rm = TRUE))
+
+    # Create a sequence of continuous dates covering the entire range
+    all_dates <- data.frame(date = seq(min(daily_data$date), max(daily_data$date), by = "day"))
+
+    # Left join to ensure continuous dates
+    daily_data_complete <- all_dates %>%
+    left_join(daily_data, by = "date")
+
+
+    
+    # New Portion for MAC address
+    Mac_val <- Mac_val()
+    Tz_val <- Tz_val()
+    daily_data_complete <- daily_data_complete %>% 
+      #mutate(mac_address = if_else(is.POSIXct(date), Mac_val, NA_character_))
+      mutate(mac_address = if_else(!is.na(date), Mac_val, NA_character_)) %>%
+      mutate(Timezone = if_else(!is.na(date), Tz_val, NA_character_))
+    return(daily_data_complete)
+  })
     
   # Reactive value for selected dataset ----
   datasetInput <- reactive({
@@ -461,7 +496,9 @@ server <- function(input, output, session) {
            "Raw Data" = Raw_data(),
            "Tidy Data" = Tidy_data(),
            "Average Data" = Avg_data(),
-           "Corrected Data" = Corr_data())
+           "Corrected Data" = Corr_data(),
+           "Daily Averaged Data(With Correction)" = Daily_data()
+           )
         #    "Frequency Data" = Freq_data())
   })
   
@@ -640,6 +677,31 @@ Zone_sel <- reactive({if(input$zonetime == "EST") {
         errorsf <- as.character(safeError(e))
         validate(
           need(exists("Corrdf"), paste("Data frame not generated please check error:", errorsf, sep = "\n"))
+        )
+        stop(safeError(e))
+      }
+    )
+  })
+
+  output$dailyfile <- DT::renderDataTable({
+    req(input$rawdata)
+    
+    tryCatch(
+      {
+        dailyDF <- Daily_data()
+        validate(need(ncol(dailyDF) == 12,  "Dataframe is missing columns please review data for errors/corruption."))
+        #Corrdf
+        Tbloption <- Zone_sel()
+        dailyDF <- datatable(dailyDF) %>% 
+          formatDate(columns = 'date',
+                     method = 'toLocaleString',
+                     params = list('en-us', Tbloption))
+        return(dailyDF)
+      },
+      error = function(e) {
+        errorsf <- as.character(safeError(e))
+        validate(
+          need(exists("dailyDF"), paste("Data frame not generated please check error:", errorsf, sep = "\n"))
         )
         stop(safeError(e))
       }
