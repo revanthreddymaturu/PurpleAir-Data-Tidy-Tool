@@ -199,8 +199,15 @@ server <- function(input, output, session) {
     req(input$rawdata)
     Raw_input <- input$rawdata # Creates File
     Tidy_input <- Raw_input %>% filter(grepl("\\.(csv|CSV)$", name)) # Selects only files that end in ".csv"
-    Rawdf <- do.call(rbind, lapply(Tidy_input$datapath, fread, fill = TRUE)) # Combines files into a df
-    #Rawdf <- do.call(rbind, lapply(Tidy_input$datapath, read_csv)) # Combines files into a df
+    
+    # Combines files into a data frame
+    Rawdf <- do.call(rbind, lapply(Tidy_input$datapath, fread, fill = TRUE))
+    
+    # Remove values in 'pm2_5_atm' and 'pm2_5_atm_b' columns if they are 500 or more
+    Rawdf <- Rawdf %>% 
+      mutate(pm2_5_atm = ifelse(pm2_5_atm >= 500, NA, pm2_5_atm),
+             pm2_5_atm_b = ifelse(pm2_5_atm_b >= 500, NA, pm2_5_atm_b))
+    
     return(Rawdf)
   })
   
